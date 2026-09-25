@@ -969,8 +969,9 @@ if(WIN32)
 		opengl32.lib
 		OneCore.lib
 	)
-elseif(APPLE OR ANDROID OR WEBOS)
-	# Nothing to link: these get their GL entry points from the frontend.
+elseif(APPLE OR ANDROID OR WEBOS OR NOT USE_OPENGL)
+	# Nothing to link: these get their GL entry points from the frontend,
+	# and a build without the OpenGL renderer calls none.
 else()
 	target_link_libraries(PCSX2_FLAGS INTERFACE
 		OpenGL::GL

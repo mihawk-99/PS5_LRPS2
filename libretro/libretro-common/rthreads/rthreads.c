@@ -22,7 +22,9 @@
 
 #ifdef __unix__
 #ifndef __sun__
-#ifndef _POSIX_C_SOURCE
+/* Not on FreeBSD: it exposes everything by default, and 199309 hides
+ * CLOCK_REALTIME (visible from 200112) and the BSD extensions below. */
+#if !defined(_POSIX_C_SOURCE) && !defined(__FreeBSD__)
 #define _POSIX_C_SOURCE 199309
 #endif
 #endif
@@ -138,6 +140,9 @@
 #else
 #include <pthread.h>
 #include <time.h>
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+#include <pthread_np.h> /* pthread_set_name_np */
+#endif
 #endif
 
 #if defined(USE_CTR_THREADS) && !defined(USE_CTRULIB_2)

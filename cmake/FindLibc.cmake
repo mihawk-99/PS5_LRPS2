@@ -31,9 +31,16 @@ elseif(ANDROID)
 	# "variables are used in this project, but they are set to NOTFOUND".
 	set(LIBC_LIBRARIES ${libm})
 else()
-	# FreeBSD doesn't have libdl
+	# FreeBSD doesn't have libdl, and a libc that carries the realtime and
+	# math entry points itself (the PS5's) has neither librt nor libm: link
+	# only what was found, never a literal NOTFOUND.
 	find_library(librt NAMES rt)
-	set(LIBC_LIBRARIES ${librt} ${libm})
+	set(LIBC_LIBRARIES)
+	foreach(lib IN ITEMS ${librt} ${libm})
+		if(lib)
+			list(APPEND LIBC_LIBRARIES ${lib})
+		endif()
+	endforeach()
 endif()
 
 # handle the QUIETLY and REQUIRED arguments and set LIBC_FOUND to TRUE if

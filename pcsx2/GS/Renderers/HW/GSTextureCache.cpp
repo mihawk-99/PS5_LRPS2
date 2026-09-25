@@ -7,7 +7,7 @@
 #include <cmath>
 #include <cstring>
 #include <cinttypes>
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__FreeBSD__)
 #include <stdlib.h>
 #else
 #include <malloc.h>

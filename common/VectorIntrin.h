@@ -66,7 +66,7 @@
 #endif
 #endif
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__FreeBSD__)
 #include <stdlib.h> // alloca
 #else
 #include <malloc.h> // alloca

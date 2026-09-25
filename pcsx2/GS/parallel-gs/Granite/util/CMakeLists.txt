@@ -42,7 +42,12 @@ if (NOT WIN32)
     # unconditionally fails the NDK lanes at final link with
     # "unable to find library -lrt".
     if (NOT APPLE AND NOT ANDROID)
-        target_link_libraries(granite-util PUBLIC rt)
+        # Only where it exists, as granite_setup_default_link_libraries
+        # does: a libc with the realtime entry points built in has none.
+        find_library(GRANITE_UTIL_LIBRT rt)
+        if (GRANITE_UTIL_LIBRT)
+            target_link_libraries(granite-util PUBLIC rt)
+        endif()
     endif()
 endif()
 if (GRANITE_SHIPPING)

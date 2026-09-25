@@ -81,7 +81,9 @@
 #include <windows.h>
 #endif
 
-#if defined(PB_LINUX) || defined(PB_FREEBSD_MEMBARRIER) || defined(PB_DARWIN)
+/* PB_FREEBSD, not PB_FREEBSD_MEMBARRIER: that is only decided below, and a
+ * FreeBSD without membarrier(2) still needs these for the x86 page flip. */
+#if defined(PB_LINUX) || defined(PB_FREEBSD) || defined(PB_DARWIN)
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>

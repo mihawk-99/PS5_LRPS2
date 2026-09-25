@@ -156,7 +156,24 @@ static VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice_libretro(VkPhysicalDevice p
 	for (unsigned i = 0; i < vk_init_info.num_required_device_extensions; i++)
 		add_name_unique(EnabledExtensionNames, vk_init_info.required_device_extensions[i]);
 
-	add_name_unique(EnabledExtensionNames, VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME);
+	// Only a device that lists the extension may be asked for it: requesting an
+	// absent one fails device creation with VK_ERROR_EXTENSION_NOT_PRESENT.
+	u32 extension_count = 0;
+	if (vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extension_count, nullptr) == VK_SUCCESS)
+	{
+		std::vector<VkExtensionProperties> available(extension_count);
+		if (vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extension_count, available.data()) == VK_SUCCESS)
+		{
+			for (u32 i = 0; i < extension_count; i++)
+			{
+				if (!strcmp(available[i].extensionName, VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME))
+				{
+					add_name_unique(EnabledExtensionNames, VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME);
+					break;
+				}
+			}
+		}
+	}
 	for (unsigned i = 0; i < sizeof(VkPhysicalDeviceFeatures) / sizeof(VkBool32); i++)
 	{
 		if (((VkBool32 *)vk_init_info.required_features)[i])

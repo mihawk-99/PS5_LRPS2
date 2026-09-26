@@ -761,11 +761,11 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "pcsx2_mtvu",
       "Emulation > MTVU (Multi-Threaded VU1) (Restart)",
       "MTVU (Multi-Threaded VU1) (Restart)",
-      "Runs VU1 on its own thread. Large speedup on multi-core CPUs; a small number of games hang with it. The default matches the platform default (on arm64, MTVU is on whenever the native VU1 recompiler drives VU1).",
+      "Runs VU1 on its own thread. Large speedup on multi-core CPUs; a small number of games hang with it, and the game database turns it off for those. The default matches the platform default (on arm64, MTVU is on whenever the native VU1 recompiler drives VU1; on the PS5, whose eight cores leave VU1 a thread of its own, it is on).",
       NULL,
       "emulation",
       {
-#ifdef ARCH_ARM64
+#if defined(ARCH_ARM64) || defined(__PROSPERO__)
          { "enabled", NULL },
          { "disabled", NULL },
 #else
@@ -774,7 +774,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
 #endif
          { NULL, NULL },
       },
-#ifdef ARCH_ARM64
+#if defined(ARCH_ARM64) || defined(__PROSPERO__)
       "enabled"
 #else
       "disabled"

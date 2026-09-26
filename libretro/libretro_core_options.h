@@ -266,7 +266,12 @@ struct retro_core_option_v2_definition option_defs_us[] = {
          { "Software (SW)", NULL },
          { NULL, NULL },
       },
+#if defined(__PROSPERO__) && defined(ENABLE_VULKAN)
+      /* The PS5's renderer is its Vulkan driver's hardware one. */
+      "Vulkan"
+#else
       "Auto"
+#endif
    },
    {
       "pcsx2_upscale_multiplier",
@@ -285,7 +290,13 @@ struct retro_core_option_v2_definition option_defs_us[] = {
          { "8x Native (~2880p/5K)", NULL },
          { NULL, NULL },
       },
+#ifdef __PROSPERO__
+      /* The PS5 renders PS2 games at 4K height by default: God of War II's and
+       * FFX's demos and San Andreas run at full speed at 6x on the console. */
+      "6x Native (~2160p/4K)"
+#else
       "1x Native (PS2)"
+#endif
    },
    {
       "pcsx2_native_scaling",

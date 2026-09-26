@@ -23,8 +23,6 @@
 #define _GNU_SOURCE 1   /* REG_RIP in <ucontext.h> */
 #endif
 
-#include <stddef.h>
-#include <stdint.h>
 #include <string.h>
 #include <faulthandler.h>
 #include <retro_atomic.h>
@@ -265,12 +263,6 @@ static void fault_filter(int sig, siginfo_t *si, void *ctx)
    pc = (void*)((ucontext_t*)ctx)->uc_mcontext->__ss.__rip;
 #elif defined(__APPLE__) && defined(__aarch64__)
    pc = (void*)((ucontext_t*)ctx)->uc_mcontext->__ss.__pc;
-#elif defined(__PROSPERO__)
-   /* The PS5's machine context is FreeBSD's, six words further on than the
-    * SDK's header places it: rip, cs, rflags, rsp and ss were measured at
-    * words 26-30 (the PS5 RetroArch title's Dolphin and PPSSPP ports). */
-   pc = (void*)((const uint64_t*)&((ucontext_t*)ctx)->uc_mcontext)
-         [offsetof(mcontext_t, mc_rip) / sizeof(uint64_t) + 6];
 #elif defined(__FreeBSD__) && defined(__x86_64__)
    pc = (void*)((ucontext_t*)ctx)->uc_mcontext.mc_rip;
 #elif defined(__x86_64__)

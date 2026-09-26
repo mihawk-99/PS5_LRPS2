@@ -18,6 +18,12 @@
 #include <retro_atomic.h>
 #include "../common/General.h"
 
+#if defined(__PROSPERO__)
+/* PS5: the code area is the platform layer's executable direct memory (my
+ * payload SDK fork, ps5platform/exec.h; VirtualMemory.cpp). */
+#include <ps5platform/exec.h>
+#endif
+
 /* The code reserve below holds a manager pointer without ever completing the
  * type, so C needs a name for it and nothing more. */
 #ifdef __cplusplus
@@ -46,6 +52,11 @@ class VirtualMemoryManager
 
 	// reserved memory (in pages)
 	u32 m_pages_reserved;
+
+#if defined(__PROSPERO__)
+	// PS5: the code area's region, when this manager holds one.
+	ps5_exec_region m_exec{};
+#endif
 
 public:
 	// If upper_bounds is nonzero and the OS fails to allocate memory that is below it,

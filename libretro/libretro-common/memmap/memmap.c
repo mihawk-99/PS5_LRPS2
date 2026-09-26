@@ -26,46 +26,23 @@
 #include <memmap.h>
 
 #if defined(__PROSPERO__)
-/* PS5: shared memory is libkernel's direct memory. Every mapping of an
- * anonymous or shared-memory object is charged to the title's small
- * flexible-memory budget, while direct memory is a separate pool of
- * several GiB, one allocation of which can be mapped at any number of
- * addresses -- which is what a shared-memory object is for here (the
- * PS5 RetroArch title's Dolphin port measured both). A reservation is
- * the kernel's virtual-range reservation, which holds addresses without
- * backing them. Views and reservations are placed above the GPU-visible
+/* PS5: shared memory is direct memory, through the platform layer (my
+ * payload SDK fork, ps5platform/shm.h). Every mapping of an anonymous or
+ * shared-memory object is charged to the title's 448 MiB of flexible
+ * memory; one direct-memory object is charged to nothing but the 12 GiB
+ * direct pool and maps at any number of addresses -- which is what a
+ * shared-memory object is for here. A reservation holds addresses without
+ * backing them. Views and reservations are placed outside the GPU-visible
  * window at 0x2_0000_0000 - 0x2_FFFF_FFFF, which the console's Vulkan
- * driver needs, and below libkernel's modules at 0x8_0000_0000. */
+ * driver needs. */
 #include <sys/mman.h>
-int64_t sceKernelGetDirectMemorySize(void);
-int32_t sceKernelAllocateDirectMemory(int64_t search_start, int64_t search_end,
-      size_t bytes, size_t alignment, int type, int64_t *start);
-int32_t sceKernelMapDirectMemory(void **address, size_t bytes, int protection,
-      int flags, int64_t start, size_t alignment);
-int32_t sceKernelReleaseDirectMemory(int64_t start, size_t bytes);
-int32_t sceKernelReserveVirtualRange(void **address, size_t bytes, int flags,
-      size_t alignment);
-#define MEMMAP_PS5_ALIGN     ((size_t)0x10000)
-#define MEMMAP_PS5_PAGE      ((size_t)0x4000)
-/* CPU read and write: the type the title's own direct-memory heap uses. */
-#define MEMMAP_PS5_TYPE      12
-/* The kernel's fixed-address flag (FreeBSD's MAP_FIXED value). */
-#define MEMMAP_PS5_FIXED     0x10
-#define MEMMAP_PS5_VIEW_HINT ((uintptr_t)0x400000000ull)
-#define MEMMAP_PS5_AREA_HINT ((uintptr_t)0x1400000000ull)
-#define MEMMAP_PS5_GPU_LOW   ((uintptr_t)0x200000000ull)
-#define MEMMAP_PS5_GPU_HIGH  ((uintptr_t)0x300000000ull)
-
-typedef struct
-{
-   int64_t start;
-   size_t  len;
-} memshm_ps5_t;
+#include <ps5platform/shm.h>
+#define MEMMAP_PS5_AREA_HINT ((void*)0x1400000000ull)
 
 /* Direct memory maps for the CPU with read and write only. */
 static int memshm_ps5_prot(int prot)
 {
-   return prot & (PROT_READ | PROT_WRITE);
+   return (prot & PROT_READ ? PS5_SHM_READ : 0) | (prot & PROT_WRITE ? PS5_SHM_WRITE : 0);
 }
 #endif
 
@@ -531,45 +508,36 @@ void memshm_unmap(void *addr, size_t len)
 
 void *memshm_create(const char *name, size_t len)
 {
-   memshm_ps5_t *h;
-   int64_t start   = -1;
-   size_t  bytes   = (len + MEMMAP_PS5_ALIGN - 1) & ~(MEMMAP_PS5_ALIGN - 1);
+   struct ps5_shm *h = (struct ps5_shm*)calloc(1, sizeof(*h));
    (void)name;
-   if (!bytes || sceKernelAllocateDirectMemory(0, sceKernelGetDirectMemorySize(),
-            bytes, MEMMAP_PS5_ALIGN, MEMMAP_PS5_TYPE, &start) != 0)
-      return NULL;
-   h = (memshm_ps5_t*)malloc(sizeof(*h));
    if (!h)
+      return NULL;
+   if (!len || ps5_shm_create(len, h) != 0)
    {
-      sceKernelReleaseDirectMemory(start, bytes);
+      free(h);
       return NULL;
    }
-   h->start = start;
-   h->len   = bytes;
    return h;
 }
 
 void memshm_destroy(void *handle)
 {
-   memshm_ps5_t *h = (memshm_ps5_t*)handle;
+   struct ps5_shm *h = (struct ps5_shm*)handle;
    if (!h)
       return;
-   sceKernelReleaseDirectMemory(h->start, h->len);
+   ps5_shm_destroy(h);
    free(h);
 }
 
-/* A hint is where the kernel starts looking, as mmap's is: the caller
- * compares what it got, as on the other platforms. No hint means above
+/* A hint is where the view is asked for, as mmap's is: the caller compares
+ * what it got, as on the other platforms. No hint means anywhere outside
  * the GPU window. */
 void *memshm_map(void *handle, size_t offset, void *hint, size_t len, int prot)
 {
-   memshm_ps5_t *h = (memshm_ps5_t*)handle;
-   void *addr;
-   if (!h || !len || offset > h->len || len > h->len - offset)
-      return NULL;
-   addr = hint ? hint : (void*)MEMMAP_PS5_VIEW_HINT;
-   if (sceKernelMapDirectMemory(&addr, len, memshm_ps5_prot(prot), 0,
-            h->start + (int64_t)offset, MEMMAP_PS5_PAGE) != 0)
+   void *addr = NULL;
+   if (!handle || !len ||
+         ps5_shm_map((const struct ps5_shm*)handle, offset, len, hint,
+            memshm_ps5_prot(prot), 0, &addr) != 0)
       return NULL;
    return addr;
 }
@@ -577,7 +545,7 @@ void *memshm_map(void *handle, size_t offset, void *hint, size_t len, int prot)
 void memshm_unmap(void *addr, size_t len)
 {
    if (addr)
-      munmap(addr, len);
+      ps5_shm_unmap(addr, len, 0);
 }
 
 #elif defined(HAVE_MMAN) && !defined(__EMSCRIPTEN__) && defined(MAP_SHARED)
@@ -962,18 +930,13 @@ memshm_area_t *memshm_area_create(size_t len)
     * At the hint first, anywhere else if it is taken, never in the GPU
     * window. */
    memshm_area_t *a;
-   void *addr = (void*)MEMMAP_PS5_AREA_HINT;
-   if (sceKernelReserveVirtualRange(&addr, len, 0, MEMMAP_PS5_ALIGN) != 0)
+   void *addr = NULL;
+   if (ps5_vrange_reserve(len, MEMMAP_PS5_AREA_HINT, 0x10000, &addr) != 0)
       return NULL;
-   if ((uintptr_t)addr < MEMMAP_PS5_GPU_HIGH && (uintptr_t)addr + len > MEMMAP_PS5_GPU_LOW)
-   {
-      munmap(addr, len);
-      return NULL;
-   }
    a = (memshm_area_t*)calloc(1, sizeof(*a));
    if (!a)
    {
-      munmap(addr, len);
+      ps5_vrange_release(addr, len);
       return NULL;
    }
    a->base = (unsigned char*)addr;
@@ -1143,7 +1106,7 @@ void memshm_area_free(memshm_area_t *area)
    VirtualFree(area->base, 0, MEM_RELEASE);
 #elif defined(__PROSPERO__)
    /* The reservation and every mapping made into it. */
-   munmap(area->base, area->len);
+   ps5_vrange_release(area->base, area->len);
 #elif defined(HAVE_MMAN) && !defined(__EMSCRIPTEN__) && defined(MAP_FIXED) && defined(MAP_ANONYMOUS)
    munmap(area->base, area->len);
 #endif
@@ -1260,13 +1223,12 @@ unsigned char *memshm_area_map(memshm_area_t *area, void *handle,
    return NULL;
 #endif
 #elif defined(__PROSPERO__)
-   memshm_ps5_t *h = (memshm_ps5_t*)handle;
-   void *addr      = at;
-   if (!area || !h || !at || !len || offset > h->len || len > h->len - offset)
+   void *addr = NULL;
+   if (!area || !handle || !at || !len)
       return NULL;
    /* Fixed, over the reservation or a hole memshm_area_unmap reserved again. */
-   if (sceKernelMapDirectMemory(&addr, len, memshm_ps5_prot(prot), MEMMAP_PS5_FIXED,
-            h->start + (int64_t)offset, MEMMAP_PS5_PAGE) != 0 || addr != at)
+   if (ps5_shm_map((const struct ps5_shm*)handle, offset, len, at, memshm_ps5_prot(prot),
+            PS5_SHM_FIXED, &addr) != 0)
       return NULL;
    area->mappings++;
    return (unsigned char*)addr;
@@ -1363,13 +1325,11 @@ bool memshm_area_unmap(memshm_area_t *area, void *at, size_t len)
    return false;
 #endif
 #elif defined(__PROSPERO__)
-   void *addr = at;
    if (!area || !at || !len)
       return false;
    /* The mapping goes and the hole is reserved again, so nothing else is
     * placed inside the area. */
-   munmap(at, len);
-   if (sceKernelReserveVirtualRange(&addr, len, MEMMAP_PS5_FIXED, 0) != 0)
+   if (ps5_shm_unmap(at, len, PS5_SHM_KEEP_RESERVED) != 0)
       return false;
    area->mappings--;
    return true;

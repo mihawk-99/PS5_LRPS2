@@ -79,22 +79,9 @@ namespace HostMemoryMap
 	//////////////////////////////////////////////////////////////////////////
 	// Code
 	//////////////////////////////////////////////////////////////////////////
-	// Each recompiler's code cache, one after another. A cache that fills is
-	// cleared and refilled, so a smaller one costs the occasional reset and
-	// nothing else.
-#if defined(__PROSPERO__)
-	// PS5: the code area is anonymous memory, charged in full to the title's
-	// flexible-memory budget when it is mapped -- about 450MB for the whole
-	// title, RetroArch and the core image included -- where upstream's 305MB
-	// would not fit. VU0's microprograms are small; VU1's are what games run.
-	static const u32 EErecSize        = 0x02800000; // 40mb
-	static const u32 IOPrecSize       = 0x00C00000; // 12mb
-	static const u32 VIFrecSize       = 0x00600000; // 6mb each
-	static const u32 mVU0recSize      = 0x01000000; // 16mb
-	static const u32 mVU1recSize      = 0x03000000; // 48mb
-	static const u32 VIFUnpackRecSize = 0x00100000; // 1mb
-	static const u32 SWrecSize        = 0x02000000; // 32mb
-#else
+	// Each recompiler's code cache, one after another, at upstream's sizes (305
+	// MiB together). On the PS5 the area is executable direct memory from the
+	// platform layer (VirtualMemory.cpp), out of the 12 GiB pool.
 	static const u32 EErecSize        = 0x04000000; // 64mb
 	static const u32 IOPrecSize       = 0x02000000; // 32mb
 	static const u32 VIFrecSize       = 0x00800000; // 8mb each
@@ -102,7 +89,6 @@ namespace HostMemoryMap
 	static const u32 mVU1recSize      = 0x04000000; // 64mb
 	static const u32 VIFUnpackRecSize = 0x00100000; // 1mb
 	static const u32 SWrecSize        = 0x04000000; // 64mb
-#endif
 
 	// EE recompiler code cache area
 	static const u32 EErecOffset   = 0x00000000;

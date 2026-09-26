@@ -65,6 +65,20 @@ VirtualMemoryManager::VirtualMemoryManager(const char* file_mapping_name, uptr b
 	}
 	else
 	{
+#if defined(__PROSPERO__)
+		/* PS5: the code area is direct memory through the platform layer,
+		 * read, write and execute at once: out of the 12 GiB direct pool
+		 * rather than the title's 448 MiB of flexible memory, so the
+		 * recompilers' caches are upstream's sizes (Memory.h). It is placed
+		 * at base only if that range is free (PS5_EXEC_AT): the caller tries
+		 * places near the core's code in turn (Memory.cpp). */
+		ps5_exec_request request = {};
+		request.bytes   = reserved_bytes;
+		request.address = base;
+		request.flags   = base ? PS5_EXEC_AT : 0;
+		if (ps5_exec_alloc(&request, &m_exec) == 0)
+			m_baseptr = static_cast<u8*>(m_exec.base);
+#else
 		PageProtectionMode mode;
 		mode.m_read  = true;
 		mode.m_write = true;
@@ -81,6 +95,7 @@ VirtualMemoryManager::VirtualMemoryManager(const char* file_mapping_name, uptr b
 			if (base)
 				m_baseptr = static_cast<u8*>(host_mmap(0, reserved_bytes, mode));
 		}
+#endif
 	}
 
 	bool fulfillsRequirements = true;
@@ -101,7 +116,11 @@ VirtualMemoryManager::VirtualMemoryManager(const char* file_mapping_name, uptr b
 		}
 		else
 		{
+#if defined(__PROSPERO__)
+			ps5_exec_free(&m_exec);
+#else
 			host_munmap(m_baseptr, reserved_bytes);
+#endif
 			m_baseptr = 0;
 		}
 	}
@@ -136,7 +155,11 @@ VirtualMemoryManager::~VirtualMemoryManager()
 #endif
 		}
 		else
+#if defined(__PROSPERO__)
+			ps5_exec_free(&m_exec);
+#else
 			host_munmap(m_baseptr, bytes);
+#endif
 	}
 	if (m_file_handle)
 		memshm_destroy(m_file_handle);

@@ -46,6 +46,9 @@ BIOS
 #include "ps2/HwInternal.h"
 #include "ps2/BiosTools.h"
 #include "SPU2/spu2.h"
+#ifdef __PROSPERO__
+#include <ps5platform/kernel.h>
+#endif
 
 namespace HostMemoryMap
 {
@@ -55,10 +58,6 @@ namespace HostMemoryMap
 } // namespace HostMemoryMap
 
 /// Attempts to find a spot near static variables for the main memory
-#ifdef __PROSPERO__
-extern "C" int sceKernelAvailableFlexibleMemorySize(size_t* size);
-#endif
-
 static VirtualMemoryManagerPtr AllocateVirtualMemory(const char* name, size_t size, size_t offset_from_base)
 {
 #if defined(_WIN32)
@@ -116,9 +115,10 @@ static VirtualMemoryManagerPtr AllocateVirtualMemory(const char* name, size_t si
 				(start < 0x300000000ull && start + span > 0x200000000ull))
 			continue;
 		VirtualMemoryManagerPtr mgr = std::make_shared<VirtualMemoryManager>(name, base, size, /*upper_bounds=*/0, /*strict=*/true);
-		/* The code area is anonymous memory, which comes out of the title's
-		 * flexible memory (main memory is direct memory, memmap.c): what is
-		 * left of it is what the rest of the core allocates from. */
+		/* Main memory and the code area are direct memory (memmap.c and
+		 * VirtualMemory.cpp, through the platform layer); what is left of the
+		 * title's flexible memory is what the rest of the core allocates
+		 * from. */
 		size_t flexible_free = 0;
 		sceKernelAvailableFlexibleMemorySize(&flexible_free);
 		log_cb(mgr->IsOk() ? RETRO_LOG_INFO : RETRO_LOG_WARN,

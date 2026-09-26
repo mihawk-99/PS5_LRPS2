@@ -45,6 +45,10 @@ extern "C" {
 
 namespace Vulkan
 {
+	// Whether the frontend supplies the entry point, so no library is needed
+	// (UseFrontendVulkanEntryPoint, below).
+	static bool s_frontend_entry_point;
+
 	void ResetVulkanLibraryFunctionPointers()
 	{
 #define VULKAN_MODULE_ENTRY_POINT(name, required) pcsx2_##name = nullptr;
@@ -64,7 +68,7 @@ namespace Vulkan
 	bool LoadVulkanLibrary()
 	{
 		// Not thread safe if a second thread calls the loader whilst the first is still in-progress.
-		if (vulkan_module)
+		if (vulkan_module || s_frontend_entry_point)
 		{
 			retro_atomic_inc_int(&vulkan_module_ref_count);
 			return true;
@@ -109,8 +113,10 @@ namespace Vulkan
 			return;
 
 		ResetVulkanLibraryFunctionPointers();
-		FreeLibrary(vulkan_module);
+		if (vulkan_module)
+			FreeLibrary(vulkan_module);
 		vulkan_module = nullptr;
+		s_frontend_entry_point = false;
 	}
 
 #else
@@ -121,7 +127,7 @@ namespace Vulkan
 	bool LoadVulkanLibrary()
 	{
 		// Not thread safe if a second thread calls the loader whilst the first is still in-progress.
-		if (vulkan_module)
+		if (vulkan_module || s_frontend_entry_point)
 		{
 			retro_atomic_inc_int(&vulkan_module_ref_count);
 			return true;
@@ -216,9 +222,28 @@ namespace Vulkan
 			dlclose(vulkan_module);
 			vulkan_module = nullptr;
 		}
+		else if (s_frontend_entry_point)
+		{
+			if (retro_atomic_fetch_sub_int(&vulkan_module_ref_count, 1) - 1 > 0)
+				return;
+
+			ResetVulkanLibraryFunctionPointers();
+			s_frontend_entry_point = false;
+		}
 	}
 
 #endif
+
+	// The frontend's entry point stands in for the library: it takes the
+	// reference the failed LoadVulkanLibrary at load did not, which the
+	// matching UnloadVulkanLibrary at unload gives back, so the last release
+	// resets the pointers as it does for a loaded library, and the next load
+	// starts from nothing.
+	void UseFrontendVulkanEntryPoint()
+	{
+		s_frontend_entry_point = true;
+		retro_atomic_inc_int(&vulkan_module_ref_count);
+	}
 
 	bool LoadVulkanInstanceFunctions(VkInstance instance)
 	{

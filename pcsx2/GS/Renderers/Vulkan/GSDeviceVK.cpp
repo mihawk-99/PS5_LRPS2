@@ -105,6 +105,15 @@ bool create_device_vulkan(retro_vulkan_context *context, VkInstance instance, Vk
 	vk_init_info.required_features              = required_features;
 	vk_init_info.vkGetInstanceProcAddr          = get_instance_proc_addr;
 
+	/* No Vulkan library was loaded -- a frontend that links its Vulkan driver
+	 * has none to load -- so the entry point the frontend passes here, the one
+	 * a libretro core is given to use, is the one the wrapper forwards to. */
+	if (!vkGetInstanceProcAddr_org && get_instance_proc_addr)
+	{
+		vkGetInstanceProcAddr_org = get_instance_proc_addr;
+		Vulkan::UseFrontendVulkanEntryPoint();
+	}
+
 	if(gpu != VK_NULL_HANDLE) {
 		VkPhysicalDeviceProperties props = {};
 		vkGetPhysicalDeviceProperties    = (PFN_vkGetPhysicalDeviceProperties)vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceProperties");
@@ -376,8 +385,9 @@ static void SafeDestroyDescriptorSetLayout(VkDevice dev, VkDescriptorSetLayout& 
 			return false;
 		};
 
-		// Required extensions.
-		if (!SupportsExtension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, true))
+		// Push descriptors: nothing in this renderer pushes a descriptor set
+		// (no layout sets the push flag), so the extension is only reported.
+		if (!SupportsExtension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, false))
 		{
 			log_cb(RETRO_LOG_INFO, "Does not support VK_KHR_push_descriptor extension\n");
 			//return false;
@@ -579,8 +589,8 @@ static void SafeDestroyDescriptorSetLayout(VkDevice dev, VkDescriptorSetLayout& 
 		// confirm we actually support push descriptor extension
 		if (push_descriptor_properties.maxPushDescriptors < 4 /*NUM_TFX_TEXTURES */)
 		{
-			log_cb(RETRO_LOG_ERROR, "maxPushDescriptors (%u) is below required (%u)\n", push_descriptor_properties.maxPushDescriptors,
-					NUM_TFX_TEXTURES);
+			log_cb(RETRO_LOG_INFO, "maxPushDescriptors (%u) is below %u; push descriptors are not used\n",
+					push_descriptor_properties.maxPushDescriptors, NUM_TFX_TEXTURES);
 			log_cb(RETRO_LOG_INFO, "VK_KHR_push_descriptor is NOT supported\n");
 			//return false;
 		}

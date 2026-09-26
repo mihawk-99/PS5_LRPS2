@@ -28,5 +28,10 @@ namespace Vulkan
 	bool LoadVulkanInstanceFunctions(VkInstance instance);
 	bool LoadVulkanDeviceFunctions(VkDevice device);
 	void UnloadVulkanLibrary();
+
+	// The frontend supplies vkGetInstanceProcAddr itself (a libretro frontend
+	// hands it to the device-creation callback): LoadVulkanLibrary then
+	// succeeds without a library of its own to load.
+	void UseFrontendVulkanEntryPoint();
 	void ResetVulkanLibraryFunctionPointers();
 } // namespace Vulkan

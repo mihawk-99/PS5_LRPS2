@@ -65,11 +65,13 @@
 #define PB_DARWIN 1
 #elif defined(__linux__) || defined(__ANDROID__)
 #define PB_LINUX 1
-#elif defined(__FreeBSD__) && !defined(__ORBIS__) && !defined(ORBIS)
+#elif defined(__FreeBSD__) && !defined(__ORBIS__) && !defined(ORBIS) \
+   && !defined(__PROSPERO__)
 /* The PS4 is FreeBSD underneath and its toolchain defines __FreeBSD__,
  * but Sony's kernel is a 9-era fork with none of the 14.1 membarrier
  * and no process-barrier API of its own. It is a multi-core console and
- * resolves to NONE like the others. */
+ * resolves to NONE like the others. So is the PS5, whose x86 page flip
+ * faulted on the write after its mprotect (SIGSEGV at the page). */
 #define PB_FREEBSD 1
 #endif
 

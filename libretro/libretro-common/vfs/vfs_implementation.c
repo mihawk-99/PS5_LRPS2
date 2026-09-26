@@ -221,10 +221,13 @@
 #endif
 
 /* fstatat(): POSIX.1-2008.  glibc, musl, bionic, the BSDs and Haiku have
- * it; QNX 6.5 does not, ORBIS's FreeBSD-derived libc does not, and on
- * Apple it arrived with the 10.10 SDK, which the PowerPC cross SDK
- * predates.  Everyone else takes the join+stat path in dirent_stat. */
-#if defined(VFS_HAVE_POSIX_METADATA) && !defined(__QNX__) && !defined(ORBIS)
+ * it; QNX 6.5 does not, ORBIS's FreeBSD-derived libc does not, neither
+ * does the PS5's runtime (its SDK links the symbol, the console resolves
+ * it to nothing), and on Apple it arrived with the 10.10 SDK, which the
+ * PowerPC cross SDK predates.  Everyone else takes the join+stat path in
+ * dirent_stat. */
+#if defined(VFS_HAVE_POSIX_METADATA) && !defined(__QNX__) && !defined(ORBIS) \
+      && !defined(__PROSPERO__)
 #if defined(__APPLE__)
 #include <AvailabilityMacros.h>
 #if defined(MAC_OS_X_VERSION_MIN_REQUIRED) && MAC_OS_X_VERSION_MIN_REQUIRED >= 101000

@@ -68,6 +68,14 @@
 #define __pagesize 0x1000
 #define __pageshift 12
 #define __cachelinesize 128
+#elif defined(__PROSPERO__)
+/* The PS5 is x86-64 with 16KB kernel pages: mmap, mprotect and every mapping
+   of direct memory work in 16KB units, so page protection and the fastmem
+   window use the vtlb's coalescing path (four 4KB guest pages to a host page),
+   as on Apple Silicon. Zen 2's cache lines are 64 bytes. */
+#define __pagesize 0x4000
+#define __pageshift 14
+#define __cachelinesize 64
 #else
 // X86 uses a 4KB granularity and 64 byte cache lines.
 #define __pagesize 0x1000

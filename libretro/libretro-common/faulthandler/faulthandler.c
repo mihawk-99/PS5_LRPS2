@@ -23,6 +23,8 @@
 #define _GNU_SOURCE 1   /* REG_RIP in <ucontext.h> */
 #endif
 
+#include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 #include <faulthandler.h>
 #include <retro_atomic.h>
@@ -83,7 +85,7 @@ static retro_atomic_int_t s_slot_inhandler[RETRO_FAULT_MAX_THREADS];
 #if defined(_WIN32)
 static void *s_veh_handle;
 #else
-#if defined(__APPLE__) || defined(__aarch64__)
+#if defined(__APPLE__) || defined(__aarch64__) || defined(__PROSPERO__)
 static struct sigaction s_old_sigbus;
 #endif
 #if !defined(__APPLE__) || defined(__aarch64__)
@@ -214,7 +216,7 @@ static LONG __stdcall fault_veh(EXCEPTION_POINTERS *eps)
 /* Chain to whatever handled this signal before us. */
 static void fault_chain(int sig, siginfo_t *si, void *ctx)
 {
-#if defined(__APPLE__) || defined(__aarch64__)
+#if defined(__APPLE__) || defined(__aarch64__) || defined(__PROSPERO__)
 #if !defined(__APPLE__) || defined(__aarch64__)
    const struct sigaction *sa = (sig == SIGBUS) ? &s_old_sigbus : &s_old_sigsegv;
 #else
@@ -263,6 +265,12 @@ static void fault_filter(int sig, siginfo_t *si, void *ctx)
    pc = (void*)((ucontext_t*)ctx)->uc_mcontext->__ss.__rip;
 #elif defined(__APPLE__) && defined(__aarch64__)
    pc = (void*)((ucontext_t*)ctx)->uc_mcontext->__ss.__pc;
+#elif defined(__PROSPERO__)
+   /* The PS5's machine context is FreeBSD's, six words further on than the
+    * SDK's header places it: rip, cs, rflags, rsp and ss were measured at
+    * words 26-30 (the PS5 RetroArch title's Dolphin and PPSSPP ports). */
+   pc = (void*)((const uint64_t*)&((ucontext_t*)ctx)->uc_mcontext)
+         [offsetof(mcontext_t, mc_rip) / sizeof(uint64_t) + 6];
 #elif defined(__FreeBSD__) && defined(__x86_64__)
    pc = (void*)((ucontext_t*)ctx)->uc_mcontext.mc_rip;
 #elif defined(__x86_64__)
@@ -318,9 +326,10 @@ bool retro_faulthandler_install(retro_fault_handler_t handler)
        * old one must be able to raise it again. */
       sa.sa_flags    |= SA_NODEFER;
 #endif
-#if defined(__APPLE__) || defined(__aarch64__)
+#if defined(__APPLE__) || defined(__aarch64__) || defined(__PROSPERO__)
       /* Darwin reports a permission violation as SIGBUS, and so does
-       * ARM64. */
+       * ARM64; the PS5 can report a fault on a reserved, unmapped page
+       * as SIGBUS as well. */
       if (sigaction(SIGBUS, &sa, &s_old_sigbus) != 0)
          ok = false;
 #endif
@@ -375,7 +384,7 @@ void retro_faulthandler_remove(retro_fault_handler_t handler)
 #else
    {
       struct sigaction sa;
-#if defined(__APPLE__) || defined(__aarch64__)
+#if defined(__APPLE__) || defined(__aarch64__) || defined(__PROSPERO__)
       sigaction(SIGBUS, &s_old_sigbus, &sa);
 #endif
 #if !defined(__APPLE__) || defined(__aarch64__)

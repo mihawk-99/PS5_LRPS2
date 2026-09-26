@@ -190,4 +190,3 @@ struct microProgManager
 
 static const uint mVUdispCacheSize = __pagesize * 2; // Dispatcher Cache Size (in bytes; dispatchers + emitted helpers incl. the exact-multiply tree stub)
 static const uint mVUcacheSafeZone =  3; // Safe-Zone for program recompilation (in megabytes)
-static const uint mVUcacheReserve = 64; // mVU0, mVU1 Reserve Cache Size (in megabytes)

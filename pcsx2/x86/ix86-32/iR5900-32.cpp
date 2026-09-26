@@ -557,7 +557,7 @@ static void recReserve(void)
 	/* R5900 Recompiler Cache */
 	code_reserve_init(&recMem);
 	recMemAssigned = 1;
-	code_reserve_assign(&recMem, GetVmMemory().CodeMemory().get(), HostMemoryMap::EErecOffset, 64 * _1mb);
+	code_reserve_assign(&recMem, GetVmMemory().CodeMemory().get(), HostMemoryMap::EErecOffset, HostMemoryMap::EErecSize);
 }
 
 static void recAlloc(void)

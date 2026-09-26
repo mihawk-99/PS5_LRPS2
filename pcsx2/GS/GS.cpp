@@ -680,6 +680,53 @@ void GSFreeWrappedMemory(void* ptr, size_t size, size_t repeat)
 	s_fh = NULL;
 }
 
+#elif defined(__PROSPERO__)
+
+#include <sys/mman.h>
+#include <memmap.h>
+
+/* PS5: the same wrapped view through libretro-common's memmap, whose PS5
+ * backend is direct memory (a shared-memory object's every mapping would be
+ * charged to the title's small flexible-memory budget): one allocation of
+ * the size, and a reservation it is mapped into repeat times back to back. */
+static void* s_gs_shm;
+static memshm_area_t* s_gs_area;
+
+void GSFreeWrappedMemory(void* ptr, size_t size, size_t repeat)
+{
+	(void)ptr;
+	(void)size;
+	(void)repeat;
+	if (s_gs_area)
+		memshm_area_free(s_gs_area);
+	s_gs_area = nullptr;
+	if (s_gs_shm)
+		memshm_destroy(s_gs_shm);
+	s_gs_shm = nullptr;
+}
+
+void* GSAllocateWrappedMemory(size_t size, size_t repeat)
+{
+	s_gs_shm  = memshm_create("GS.mem", size);
+	s_gs_area = s_gs_shm ? memshm_area_create(size * repeat) : nullptr;
+	if (!s_gs_area)
+	{
+		GSFreeWrappedMemory(nullptr, size, repeat);
+		return nullptr;
+	}
+	u8* const base = memshm_area_base(s_gs_area);
+	for (size_t i = 0; i < repeat; i++)
+	{
+		if (!memshm_area_map(s_gs_area, s_gs_shm, 0, base + size * i, size, PROT_READ | PROT_WRITE))
+		{
+			fprintf(stderr, "Fail to map contiguous segment\n");
+			GSFreeWrappedMemory(nullptr, size, repeat);
+			return nullptr;
+		}
+	}
+	return base;
+}
+
 #else
 
 #include <sys/mman.h>

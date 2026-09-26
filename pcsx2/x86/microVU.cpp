@@ -53,7 +53,8 @@ void mVUinit(microVU* mVU, uint vuIndex)
 	mVU->microMemSize = (mVU->index ? 0x4000 : 0x1000);
 	mVU->progSize     = (mVU->index ? 0x4000 : 0x1000) / 4;
 	mVU->progMemMask  =  mVU->progSize-1;
-	mVU->cacheSize    =  mVUcacheReserve;
+	/* In megabytes; VU1 takes the block at mVU0recOffset (see mVUreserveCache). */
+	mVU->cacheSize    = (mVU->index ? HostMemoryMap::mVU1recSize : HostMemoryMap::mVU0recSize) / _1mb;
 	mVU->cache        = NULL;
 	mVU->dispCache    = NULL;
 	mVU->startFunct   = NULL;

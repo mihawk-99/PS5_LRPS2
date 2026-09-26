@@ -79,32 +79,57 @@ namespace HostMemoryMap
 	//////////////////////////////////////////////////////////////////////////
 	// Code
 	//////////////////////////////////////////////////////////////////////////
-	static const u32 CodeSize = 0x13100000; // 305 mb
+	// Each recompiler's code cache, one after another. A cache that fills is
+	// cleared and refilled, so a smaller one costs the occasional reset and
+	// nothing else.
+#if defined(__PROSPERO__)
+	// PS5: the code area is anonymous memory, charged in full to the title's
+	// flexible-memory budget when it is mapped -- about 450MB for the whole
+	// title, RetroArch and the core image included -- where upstream's 305MB
+	// would not fit. VU0's microprograms are small; VU1's are what games run.
+	static const u32 EErecSize        = 0x02800000; // 40mb
+	static const u32 IOPrecSize       = 0x00C00000; // 12mb
+	static const u32 VIFrecSize       = 0x00600000; // 6mb each
+	static const u32 mVU0recSize      = 0x01000000; // 16mb
+	static const u32 mVU1recSize      = 0x03000000; // 48mb
+	static const u32 VIFUnpackRecSize = 0x00100000; // 1mb
+	static const u32 SWrecSize        = 0x02000000; // 32mb
+#else
+	static const u32 EErecSize        = 0x04000000; // 64mb
+	static const u32 IOPrecSize       = 0x02000000; // 32mb
+	static const u32 VIFrecSize       = 0x00800000; // 8mb each
+	static const u32 mVU0recSize      = 0x04000000; // 64mb
+	static const u32 mVU1recSize      = 0x04000000; // 64mb
+	static const u32 VIFUnpackRecSize = 0x00100000; // 1mb
+	static const u32 SWrecSize        = 0x04000000; // 64mb
+#endif
 
-	// EE recompiler code cache area (64mb)
+	// EE recompiler code cache area
 	static const u32 EErecOffset   = 0x00000000;
 
-	// IOP recompiler code cache area (32mb)
-	static const u32 IOPrecOffset  = 0x04000000;
+	// IOP recompiler code cache area
+	static const u32 IOPrecOffset  = EErecOffset + EErecSize;
 
-	// newVif0 recompiler code cache area (8mb)
-	static const u32 VIF0recOffset = 0x06000000;
+	// newVif0 recompiler code cache area
+	static const u32 VIF0recOffset = IOPrecOffset + IOPrecSize;
 
-	// newVif1 recompiler code cache area (8mb)
-	static const u32 VIF1recOffset = 0x06800000;
+	// newVif1 recompiler code cache area
+	static const u32 VIF1recOffset = VIF0recOffset + VIFrecSize;
 
-	// microVU1 recompiler code cache area (64mb)
-	static const u32 mVU0recOffset = 0x07000000;
+	// microVU1 recompiler code cache area (upstream's names are swapped:
+	// microVU.cpp gives VU1 this one)
+	static const u32 mVU0recOffset = VIF1recOffset + VIFrecSize;
 
-	// microVU0 recompiler code cache area (64mb)
-	static const u32 mVU1recOffset = 0x0B000000;
+	// microVU0 recompiler code cache area
+	static const u32 mVU1recOffset = mVU0recOffset + mVU1recSize;
 
-	// SSE-optimized VIF unpack functions (1mb)
-	static const u32 VIFUnpackRecOffset = 0x0F000000;
+	// SSE-optimized VIF unpack functions
+	static const u32 VIFUnpackRecOffset = mVU1recOffset + mVU0recSize;
 
-	// Software Renderer JIT buffer (64mb)
-	static const u32 SWrecOffset = 0x0F100000;
-	static const u32 SWrecSize = 0x04000000;
+	// Software Renderer JIT buffer
+	static const u32 SWrecOffset = VIFUnpackRecOffset + VIFUnpackRecSize;
+
+	static const u32 CodeSize = SWrecOffset + SWrecSize;
 }
 
 // --------------------------------------------------------------------------------------

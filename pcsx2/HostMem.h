@@ -85,7 +85,14 @@ static inline void* host_mmap(void* hint, size_t size, const PageProtectionMode&
 		if (m.m_read && m.m_exec)
 			flags |= MAP_JIT;
 #endif
+#if defined(__PROSPERO__)
+		/* PS5: a mapping asked for with PROT_EXEC is returned but does not
+		 * execute; one mapped read-write and then made executable does (the
+		 * PS5 title's Dolphin and PPSSPP ports). */
+		p = mmap(hint, size, host_prot(m) & ~PROT_EXEC, flags, -1, 0);
+#else
 		p = mmap(hint, size, host_prot(m), flags, -1, 0);
+#endif
 		if (p == MAP_FAILED)
 			return NULL;
 		if (hint && p != hint)
@@ -93,6 +100,13 @@ static inline void* host_mmap(void* hint, size_t size, const PageProtectionMode&
 			munmap(p, size);
 			return NULL;
 		}
+#if defined(__PROSPERO__)
+		if ((host_prot(m) & PROT_EXEC) && mprotect(p, size, host_prot(m)) != 0)
+		{
+			munmap(p, size);
+			return NULL;
+		}
+#endif
 		return p;
 	}
 #endif

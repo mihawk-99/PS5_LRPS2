@@ -55,6 +55,10 @@ namespace HostMemoryMap
 } // namespace HostMemoryMap
 
 /// Attempts to find a spot near static variables for the main memory
+#ifdef __PROSPERO__
+extern "C" int sceKernelAvailableFlexibleMemorySize(size_t* size);
+#endif
+
 static VirtualMemoryManagerPtr AllocateVirtualMemory(const char* name, size_t size, size_t offset_from_base)
 {
 #if defined(_WIN32)
@@ -80,6 +84,52 @@ static VirtualMemoryManagerPtr AllocateVirtualMemory(const char* name, size_t si
 		if (mgr->IsOk())
 			return mgr;
 	}
+#elif defined(__PROSPERO__)
+	/* PS5: the same rule -- main memory and the code area in reach of the
+	 * core's own code and data, which the recompilers address RIP-relative
+	 * or as 32-bit absolutes (common/emitter/c89emit.h, E_MODRM_ABS) -- with
+	 * two more constraints: nothing may land in the GPU-visible window at
+	 * 0x2_0000_0000 - 0x2_FFFF_FFFF, which the console's Vulkan driver
+	 * needs, or at libkernel's modules from 0x8_0000_0000; and the kernel
+	 * takes a hint as a hint, so a candidate it moved is refused (strict)
+	 * and the next one tried. Both blocks are asked for at the same
+	 * candidate, main memory at its start and the code area after it
+	 * (offset_from_base), so they sit side by side. Every attempt is
+	 * logged: which addresses the console gives out is what the first run
+	 * on it measured. */
+	const uptr anchor   = (uptr)(void*)AllocateVirtualMemory;
+	const uptr codeBase = anchor / (1 << 28) * (1 << 28);
+	const uptr span     = (uptr)HostMemoryMap::MainSize + HostMemoryMap::CodeSize;
+	static const int offsets[] = {1, 2, 3, 4, -1, -2, -3, -4, -5, -6};
+	for (int offset : offsets)
+	{
+		const uptr start = codeBase + (sptr)offset * (1 << 28);
+		const uptr base  = start + offset_from_base;
+		/* The far end of the whole block from the anchor, and the anchor
+		 * from its near end, both inside a signed 32-bit displacement with
+		 * room for the core's own image. */
+		const sptr reach_high = (sptr)(start + span) - (sptr)anchor;
+		const sptr reach_low  = (sptr)anchor - (sptr)start;
+		if (reach_high > 0x7c000000 || reach_low > 0x7c000000)
+			continue;
+		if (start < 0x100000000ull || start + span > 0x800000000ull ||
+				(start < 0x300000000ull && start + span > 0x200000000ull))
+			continue;
+		VirtualMemoryManagerPtr mgr = std::make_shared<VirtualMemoryManager>(name, base, size, /*upper_bounds=*/0, /*strict=*/true);
+		/* The code area is anonymous memory, which comes out of the title's
+		 * flexible memory (main memory is direct memory, memmap.c): what is
+		 * left of it is what the rest of the core allocates from. */
+		size_t flexible_free = 0;
+		sceKernelAvailableFlexibleMemorySize(&flexible_free);
+		log_cb(mgr->IsOk() ? RETRO_LOG_INFO : RETRO_LOG_WARN,
+				"PS5: %s %#zx bytes at %#llx (core at %#llx): %s, %zu KiB of flexible memory free\n",
+				name ? "main memory" : "code area", size, (unsigned long long)base,
+				(unsigned long long)anchor, mgr->IsOk() ? "placed" : "refused", flexible_free / 1024);
+		if (mgr->IsOk())
+			return mgr;
+	}
+	log_cb(RETRO_LOG_ERROR, "PS5: no place in reach of the core at %#llx for %s\n",
+			(unsigned long long)anchor, name ? "main memory" : "the code area");
 #endif
 	return std::make_shared<VirtualMemoryManager>(name, 0, size);
 }
